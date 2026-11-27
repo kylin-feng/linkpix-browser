@@ -334,17 +334,30 @@ async function main() {
   }
 
   if (command === "whoami") {
-    await withPage(options, async ({ page }) => {
+    await withPage(options, async ({ page, token }) => {
+      // userInfo 是网页端登录后写进 localStorage 的快照；用缓存 token 驱动的场景可能没有。
       const info = await page.evaluate(() => {
         try { return JSON.parse(localStorage.getItem("userInfo") || "null"); } catch { return null; }
       });
+      // 空对象也算没有快照：某些页面会先写一个 {} 占位
+      const hasSnapshot = Boolean(info && (info.nickname || info.phone || info.userId));
+      if (!hasSnapshot) {
+        out({
+          ok: true,
+          loggedIn: Boolean(token),
+          nickname: null,
+          message: "token 有效，但 profile 里没有账号快照。想看昵称和积分余额，跑一次 `linkpix login`（已登录时不会要求重新扫码）。",
+        });
+        return;
+      }
       out({
         ok: true,
-        nickname: info && info.nickname,
-        phone: info && info.phone,
-        userId: info && info.userId,
-        balance: info && info.balance,
-        packages: ((info && info.vipInfo && info.vipInfo.packagePropertyList) || []).map((p) => ({
+        loggedIn: true,
+        nickname: info.nickname,
+        phone: info.phone,
+        userId: info.userId,
+        balance: info.balance,
+        packages: ((info.vipInfo && info.vipInfo.packagePropertyList) || []).map((p) => ({
           name: p.name, remain: `${p.totalNumber - p.usageNumber}`, unit: p.unit, expire: p.expireTime,
         })),
       });
