@@ -55,6 +55,21 @@ node scripts/linkpix.mjs video --image ./a.jpg --prompt "..." --duration 5 --dry
 node scripts/linkpix.mjs video --image ./a.jpg --prompt "..." --duration 5 --wait --out ./out
 ```
 
+## 当成 Agent Skill 装
+
+这个仓库根目录就是一份标准 Skill（`SKILL.md` + `scripts/` + `references/`）。
+
+```bash
+# Claude Code / ZCode：把整个目录放进 skills 目录即可
+cp -r linkpix-browser ~/.claude/skills/linkpix-browser
+
+# 或者只在当前项目里用
+mkdir -p .claude/skills && cp -r linkpix-browser .claude/skills/
+```
+
+装好之后，跟 agent 说「用 LinkPix 把这张商品图做成带货视频」，它会读 `SKILL.md`
+自己拼命令；`references/api.md` 在需要查参数或排错时才会被读进上下文。
+
 ## 命令
 
 | 命令 | 作用 |
