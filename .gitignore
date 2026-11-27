@@ -1,0 +1,19 @@
+# 依赖
+node_modules/
+
+# 浏览器 profile 里是你的登录态，绝对不能提交
+.linkpix-browser/
+.profile/
+
+# 产物
+out/
+linkpix-out/
+*.mp4
+*.webm
+
+# 临时
+*.log
+.DS_Store
+.env
+.env.*
+*.tmp

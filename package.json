@@ -1,0 +1,25 @@
+{
+  "name": "linkpix-browser-skill",
+  "version": "0.1.0",
+  "description": "用浏览器登录态操作青虎 AI LinkPix 的 Agent Skill：图生视频、素材上传、模型定价查询。不需要 API key。",
+  "type": "module",
+  "bin": {
+    "linkpix": "scripts/linkpix.mjs"
+  },
+  "scripts": {
+    "login": "node scripts/linkpix.mjs login",
+    "models": "node scripts/linkpix.mjs models",
+    "test": "node scripts/linkpix.mjs --help"
+  },
+  "keywords": [
+    "agent-skill", "linkpix", "qinghu", "iqinghu", "ecommerce",
+    "playwright", "browser-automation", "image-to-video"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}
