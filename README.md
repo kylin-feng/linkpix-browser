@@ -2,24 +2,6 @@
 
 > 不申请 API key，用浏览器登录态调青虎 AI LinkPix 的 Agent Skill。
 
-## 先说清楚「用浏览器」是什么意思
-
-它在真浏览器里登录（扫码一次），之后有两种干法：
-
-**默认（`--engine api`）** —— 由浏览器在页面上下文里发出每一次请求。cookie、UA、Origin、
-`localStorage` 里的 token 全是你手点时的同一份。身份是「你本人开着网页在操作」，
-而不是「拿 API key 从服务端调」。快，稳，看不见。
-
-**`--engine ui`** —— 真的点按钮、真的往输入框里打字，**有头可见**。慢十倍，但每一步都能盯着看：
-
-```bash
-node scripts/linkpix.mjs video --engine ui --image ./a.jpg --prompt "..." --duration 5
-```
-
-UI 引擎的定位只用可访问名称和 DOM 关系，不用坐标。这不是洁癖——这个页面上坐标点击会稳定地
-打到隔壁控件（实测三次分别命中通知条关闭键、工具栏按钮、商品分析接口）。完整踩坑记录在
-[`references/api.md`](references/api.md) 附录，想改 UI 引擎的话先读那个。
-
 一张商品图 → 一条带货视频。这个仓库做的事很简单：**把你网页上手动点的那套操作，变成一条命令。**
 
 ```bash
@@ -29,10 +11,55 @@ node scripts/linkpix.mjs video --image ./商品图.jpg \
 ```
 
 ```
-提交中：Viduq2-turbo / 5秒 / portrait / 1条…
-{"ok":true,"stage":"done","taskId":"...","videos":["https://...mp4"],
- "files":[{"file":"out/....mp4","bytes":1843200}]}
+提交中（ui）：Viduq3-turbo / 5秒 / portrait / 1条…
+已提交 taskId=fe43e66063114db6995c593f833f1a20
+  67s：pending
+ 134s：processing
+{"ok": true, "stage": "done", "engine": "ui", "status": "completed",
+ "videos": ["https://static-001.iqinghu.com/ai_video/....mp4"],
+ "files": [{"file": "out/fe43e660....mp4", "bytes": 1318084}]}
 ```
+
+## 它长什么样
+
+![青虎 AI LinkPix 工作台](assets/studio.jpg)
+
+这个 skill 操作的就是这个界面。左边是功能面（图像生成 / 视频生成 / 详情图 / 广告素材 /
+POD / 视频翻译 / 工具），中间那条输入框是全部操作入口。
+
+### 一个输入框就够了
+
+![上传参考图 + 提示词 + 参数 + 预估积分](assets/composer.jpg)
+
+上传参考图 → 写提示词 → 选「模型 / 时长 / 比例 / 语言 / 数量」→ 右下角点提交。
+`--dry-run` 会把这里的参数和预估积分原样打印出来，不提交、不扣费。
+
+### 十二个模型，价格和免费额度都在界面上
+
+![模型列表](assets/models.jpg)
+
+`linkpix models` 读的就是这份目录：每秒单价、是否维护、是否需要参考图、哪个免费。
+自动选型默认避开免费模型——它的额度只有一条，用完再提交不会报错，只会永远排队。
+
+> 截图来自实测环境，账号昵称与头像已隐去。
+
+## 先说清楚「用浏览器」是什么意思
+
+它在真浏览器里登录（扫码一次），之后有两种干法：
+
+**默认（`--engine api`）** —— 由浏览器在页面上下文里发出每一次请求。cookie、UA、Origin、
+`localStorage` 里的 token 全是你手点时的同一份。身份是「你本人开着网页在操作」，
+而不是「拿 API key 从服务端调」。快，稳，看不见。
+
+**`--engine ui`** —— 真的点按钮、真的往输入框里打字，**有头可见**，就是上面截图里那套动作：
+
+```bash
+node scripts/linkpix.mjs video --engine ui --image ./a.jpg --prompt "..." --duration 5
+```
+
+UI 引擎的定位只用可访问名称和 DOM 关系，不用坐标。这不是洁癖——这个页面上坐标点击会稳定地
+打到隔壁控件（实测三次分别命中通知条关闭键、工具栏按钮、商品分析接口）。完整踩坑记录在
+[`references/api.md`](references/api.md) 附录，想改 UI 引擎的话先读那个。
 
 ## 为什么要这个
 
