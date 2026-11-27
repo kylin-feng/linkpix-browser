@@ -281,6 +281,19 @@ export async function downloadTo(url, outDir, fallbackName) {
   return { file, bytes: buf.length };
 }
 
+/** 把一个远端素材落到本地临时文件，供 UI 模式走上传框。 */
+export async function downloadTemp(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`下载素材失败 HTTP ${res.status}：${url}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const ext = path.extname(new URL(url).pathname) || ".png";
+  const dir = path.join(os.tmpdir(), "linkpix-browser");
+  await fsp.mkdir(dir, { recursive: true });
+  const file = path.join(dir, `asset-${Date.now()}${ext}`);
+  await fsp.writeFile(file, buf);
+  return file;
+}
+
 export function ensureDirSync(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }

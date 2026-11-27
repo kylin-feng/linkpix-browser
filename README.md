@@ -4,17 +4,21 @@
 
 ## 先说清楚「用浏览器」是什么意思
 
-它在真浏览器里登录（扫码一次），之后**由浏览器在页面上下文里发出每一次请求**——
-cookie、UA、Origin、`localStorage` 里的 token 全是你手点时的同一份。所以它的身份是
-「你本人开着网页在操作」，而不是「拿 API key 从服务端调用」。
+它在真浏览器里登录（扫码一次），之后有两种干法：
 
-但它**不模拟鼠标点击**。原因写在 [`references/api.md`](references/api.md) 的附录里，
-一句话概括：这个工作台的提交键是一张 `<img>`，同页还有多张 class 相近、`opacity: 0` 的
-装饰图，实测三次坐标点击分别打到了通知条关闭键、工具栏按钮和商品分析接口；
-回车也不是提交，而是触发「AI 生成提示词」并把你的词覆盖掉。
+**默认（`--engine api`）** —— 由浏览器在页面上下文里发出每一次请求。cookie、UA、Origin、
+`localStorage` 里的 token 全是你手点时的同一份。身份是「你本人开着网页在操作」，
+而不是「拿 API key 从服务端调」。快，稳，看不见。
 
-如果你要的是「肉眼看着它一个个点」，这个仓库不是——它选择确定性，放弃表演性。
+**`--engine ui`** —— 真的点按钮、真的往输入框里打字，**有头可见**。慢十倍，但每一步都能盯着看：
 
+```bash
+node scripts/linkpix.mjs video --engine ui --image ./a.jpg --prompt "..." --duration 5
+```
+
+UI 引擎的定位只用可访问名称和 DOM 关系，不用坐标。这不是洁癖——这个页面上坐标点击会稳定地
+打到隔壁控件（实测三次分别命中通知条关闭键、工具栏按钮、商品分析接口）。完整踩坑记录在
+[`references/api.md`](references/api.md) 附录，想改 UI 引擎的话先读那个。
 
 一张商品图 → 一条带货视频。这个仓库做的事很简单：**把你网页上手动点的那套操作，变成一条命令。**
 
@@ -96,7 +100,7 @@ mkdir -p .claude/skills && cp -r linkpix-browser .claude/skills/
 | `status <taskId>` | 查任务状态 |
 | `download <taskId> --out dir` | 下载产物 |
 
-`video` 的常用参数：`--model` `--duration` `--ratio` `--count` `--language` `--wait` `--out` `--dry-run`。
+`video` 的常用参数：`--engine` `--model` `--duration` `--ratio` `--count` `--language` `--wait` `--out` `--dry-run`。
 
 不指定 `--model` 时按**每秒单价从低到高**自动挑，**默认跳过免费模型**（原因见下）。
 `--ratio` 收 `竖屏/横屏/方屏/9:16/16:9/1:1`，`--language` 收 `简体中文/英语/日语…`。

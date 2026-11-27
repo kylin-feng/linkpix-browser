@@ -154,33 +154,58 @@ POST /api/qinghu-ai-agent/ai/video/getTaskScore
    `status: processing`，但任务会永久停在 `pending`——没有任何错误码提示你额度没了。
    所以自动选型默认跳过 `isFree` 的 SKU。状态里 `freeChannel: true` 说明走的是免费通道。
 
-## 附：为什么没做「模拟点击」版
+## 附：UI 自动化踩坑记录
 
-这个仓库所有功能都是**浏览器在页面上下文里发请求**，不是脚本去点按钮。
-不是因为懒——是真的点不准。下面是在 `2026-11-27` 那一版工作台上实测到的：
+本仓库有两种驱动方式：`--engine api`（默认，页面内请求）和 `--engine ui`（真点真填）。
+下面是把 UI 模式跑通之前踩的坑，按发现顺序记。
 
-**1. 提交键不是 `<button>`。**
-输入区右下角那个箭头是一张绝对定位的 `<img>`（class 形如 `absolute bottom-[0px] right-...`）。
-同一页里还有多张 class 相似、`opacity: 0` 的装饰图（如 `hi-lite-img`），按 class 匹配会拿到不可见的那个。
+### 1. 提交键不是 `<button>`，也没有 `alt`
 
-**2. 坐标点击会打到隔壁。**
-同一套坐标在三次尝试里分别命中了：顶部通知条的关闭键、工具栏的「提示词」按钮、
-商品分析（打出了 `POST /ai/product/analyze`）。也就是说点击落点会随 composer 高度和
-浮层状态漂移，重试也没用——每次错的还不一样。
+输入区右下角那个发送箭头，DOM 里是一张 `<img>`，**没有 `alt` 属性**：
 
-**3. 回车不是提交，是「AI 生成提示词」。**
-在 `.ProseMirror` 里按 Enter 会打 `POST /ai/chat/generatePrompt`（SSE 流式返回），
-把用户写好的提示词整段替换掉。任何「没找到按钮就回车兜底」的实现都会静默改写需求。
+```
+img[alt="arrow-up"]          → 0 个
+getByRole("img", { name: "arrow-up" }) → 1 个   ✅
+```
 
-**4. 提示词是 ProseMirror（contenteditable div），不是 textarea。**
+可访问名称是从上层（aria-label / title / 组件注入）来的，所以只能按 role + name 找。
+按 class 找会命中同页多张 class 几乎相同、且 `opacity: 0` 的装饰图（如 `hi-lite-img`）。
+
+### 2. 坐标点击会漂移，而且每次漂到不同控件
+
+同一套坐标逻辑，三次实测分别命中了：
+
+| 打到的东西 | 后果 |
+|---|---|
+| 顶部通知条的关闭键 | 什么也没发生 |
+| 工具栏「提示词」按钮 | 弹出面板盖住 composer |
+| 商品分析 | 打出 `POST /ai/product/analyze` |
+
+composer 的高度会随提示词长度、上传缩略图数量变化，硬编码或按容器推算坐标都不可靠。
+
+### 3. 回车不是提交，是「AI 生成提示词」
+
+在 `.ProseMirror` 里按 Enter 会打 `POST /ai/chat/generatePrompt`（SSE 流式），
+把用户写好的提示词整段替换掉。**不要用回车兜底提交**——它会静默改写需求。
+
+### 4. 提示词是 ProseMirror，不是 textarea
+
 `fill()` 不管用，要 `click()` + `keyboard.insertText()`。
 
-**5. 时长是 ant-input-number（滑杆 + 数字框），没有档位按钮。**
-要改时长只能往 `.video-duration-range input` 里填值，并按它自己的
-`aria-valuemin/aria-valuemax` 夹紧，否则会被静默改回去。
+### 5. 上传后站点会自动生成一大段提示词
 
-**6. 上传后站点会自动生成一大段提示词。**
-不清空就直接提交，提交的是它生成的词，不是用户要的。
+不清空直接提交，提交的是它生成的词。
 
-结论：这套界面可以做**只读**的 UI 操作（读工具栏、读预估积分），但**提交**这一下没有稳定的
-可编程入口。所以最终选择了页面内请求——它 100% 确定，且不需要维护一堆会随改版失效的选择器。
+### 6. 时长是 ant-input-number，没有档位按钮
+
+只能往 `.video-duration-range input` 填值，并按它自己的 `aria-valuemin/aria-valuemax`
+夹紧，否则会被静默改回去。换模型会把时长重置成该模型默认值，所以顺序必须是「先选模型，再设时长」。
+
+### 7. 提交会打出一串 POST
+
+预检、计分、建任务依次发出，只等第一个会抓错。要全收下来，再找带 `videoTaskId` 的那条。
+
+### 结论
+
+UI 模式可以做，前提是**只用可访问名称和 DOM 关系定位，完全不用坐标**。
+它比 api 模式脆（站点改版会失效），但能肉眼看见每一步，适合演示和排错。

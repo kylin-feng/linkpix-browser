@@ -15,8 +15,10 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import {
   BASE, BIZ, api, cacheToken, closeQuietly, downloadTo, fmtCredits, httpJson,
-  launch, openSession, readCachedToken, readToken, resolveAsset, uploadFile, waitForLogin,
+  downloadTemp, isUrl, launch, openSession, readCachedToken, readToken, resolveAsset,
+  uploadFile, waitForLogin,
 } from "./lib.mjs";
+import { submitViaUI } from "./ui.mjs";
 
 const LANG = {
   简体中文: "simplified-chinese", 繁体中文: "traditional-chinese", 英语: "english",
@@ -262,7 +264,8 @@ video 选项：
   --wait                提交后等到出片
   --out <目录>          --wait 出片后直接下载
   --prefer-free         自动选型时优先用免费模型（额度通常只有一条，用完后任务会一直排队）
-  --headless            无头运行（默认无头）
+  --engine ui|api       驱动方式：api（默认，页面内请求）或 ui（真点真填，有头可见）
+  --headless            无头运行；--engine ui 默认有头
   --dry-run             只打印将要提交的内容和预估积分，不提交
 
 通用选项：
@@ -270,8 +273,14 @@ video 选项：
   --token <token>       手动指定 token，跳过读 profile
 `;
 
+function resolveHeadless(options) {
+  // 显式 --headless 就无头；否则 api 无头、ui 有头（ui 的意义就是能看见）
+  if (options.headless === true) return true;
+  return (options.engine || "api") !== "ui";
+}
+
 async function withPage(options, fn) {
-  const context = await launch({ headless: options.headless !== false });
+  const context = await launch({ headless: resolveHeadless(options) });
   try {
     const page = await openSession(context);
     // 优先级：显式 --token > profile 里的 localStorage > 上次缓存
@@ -315,7 +324,8 @@ async function main() {
       wait: { type: "boolean", default: false },
       "prefer-free": { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
-      headless: { type: "boolean", default: true },
+      headless: { type: "boolean" },
+      engine: { type: "string", default: "api" },
       help: { type: "boolean", short: "h", default: false },
     },
   });
@@ -439,10 +449,22 @@ async function main() {
     if (!options.prompt) throw new Error("缺少 --prompt。描述镜头、场景、动作，越具体越好。");
 
     await withPage(options, async ({ context, page, token }) => {
-      // 1) 素材先上传换公网 URL
+      const engine = options.engine === "ui" ? "ui" : "api";
+      if (engine === "ui" && Number(options.count || 1) > 1) {
+        throw new Error("UI 模式不支持 --count>1（界面上的数量控件没做适配），用 --engine api 批量出。");
+      }
+
+      // 1) 素材：api 模式换成公网 URL；ui 模式要本地文件路径（它自己去点上传框）
       const assets = [];
-      for (const item of images) {
-        assets.push(await resolveAsset(context, page, item, BIZ.image, token));
+      const localPaths = [];
+      if (engine === "ui") {
+        for (const item of images) {
+          localPaths.push(isUrl(item) ? await downloadTemp(item) : path.resolve(item));
+        }
+      } else {
+        for (const item of images) {
+          assets.push(await resolveAsset(context, page, item, BIZ.image, token));
+        }
       }
       const imageUrls = assets.map((a) => a.url);
 
@@ -485,7 +507,7 @@ async function main() {
         out({
           ok: true, dryRun: true,
           model: model.label, skuId: model.id, duration, orientation, count, language,
-          images: imageUrls, assets,
+          engine, images: engine === "ui" ? localPaths : imageUrls, assets,
           estimatedCredits: model.isFree ? "免费" : fmtCredits(estimate),
           payload,
         });
@@ -493,18 +515,30 @@ async function main() {
       }
 
       // 3) 提交
-      process.stderr.write(`提交中：${model.label} / ${duration}秒 / ${orientation} / ${count}条…\n`);
-      const submit = await api(page, {
-        method: "POST", path: "/api/qinghu-ai-agent/ai/video/task", body: payload, token,
-      });
-      const data = (submit.body && submit.body.data) || {};
-      const taskId = data.videoTaskId || data.qingHuTaskId;
-      if (!taskId) throw new Error(`提交后没拿到任务 ID：${JSON.stringify(submit.body).slice(0, 400)}`);
+      process.stderr.write(`提交中（${engine}）：${model.label} / ${duration}秒 / ${orientation} / ${count}条…\n`);
+      let taskId = null;
+      let uiCredits = null;
+      if (engine === "ui") {
+        const r = await submitViaUI({
+          page, imagePaths: localPaths, prompt: options.prompt,
+          modelLabel: model.label, duration, orientation,
+          maxCredits: model.isFree ? 0 : Math.ceil((estimate ?? 0) * 2.5),
+        });
+        taskId = r.taskId;
+        uiCredits = r.uiCredits;
+      } else {
+        const submit = await api(page, {
+          method: "POST", path: "/api/qinghu-ai-agent/ai/video/task", body: payload, token,
+        });
+        const data = (submit.body && submit.body.data) || {};
+        taskId = data.videoTaskId || data.qingHuTaskId;
+        if (!taskId) throw new Error(`提交后没拿到任务 ID：${JSON.stringify(submit.body).slice(0, 400)}`);
+      }
 
       const base = {
-        ok: true, stage: "submitted", taskId, status: "processing",
+        ok: true, stage: "submitted", taskId, engine, status: "processing",
         model: model.label, duration, orientation, count,
-        estimatedCredits: model.isFree ? "免费" : fmtCredits(estimate),
+        estimatedCredits: model.isFree ? "免费" : fmtCredits(uiCredits ?? estimate),
       };
       // 立刻把 taskId 打到 stderr：--wait 可能要等几十分钟，中途另开终端查进度、
       // 或者直接中断这条命令都用得上。
