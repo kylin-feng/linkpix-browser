@@ -84,7 +84,7 @@ mkdir -p .claude/skills && cp -r linkpix-browser .claude/skills/
 
 `video` 的常用参数：`--model` `--duration` `--ratio` `--count` `--language` `--wait` `--out` `--dry-run`。
 
-不指定 `--model` 时按 **免费 → 每秒单价最低 → 时长匹配** 自动挑，所以默认基本不花钱。
+不指定 `--model` 时按**每秒单价从低到高**自动挑，**默认跳过免费模型**（原因见下）。
 `--ratio` 收 `竖屏/横屏/方屏/9:16/16:9/1:1`，`--language` 收 `简体中文/英语/日语…`。
 
 ## 它是怎么工作的
@@ -115,9 +115,17 @@ Playwright 持久化 profile
 
 按秒计费：`每秒单价 × 时长 × 数量`。
 
-有一个**完全免费**的模型：`Viduq2-turbo`，5 秒、必须给参考图、只能出 1 条。适合先验证提示词。
-其余从 `Viduq3-turbo` 的 0.7 积分/秒到 `可灵3.0 Omni` 的 4 积分/秒不等。
+有一个免费模型 `Viduq2-turbo`（5 秒、必须给参考图）。
 
+**但免费额度通常只有一条**，而且额度用完之后再提交**不会报错**——你会拿到一个永远
+`pending` 的任务，看起来像卡住了。这就是为什么自动选型默认跳过它：
+
+```bash
+# 想白嫖一次，显式点名
+node scripts/linkpix.mjs video --image ./a.jpg --prompt "..." --duration 5 --model Viduq2-turbo
+```
+
+其余模型从 `Viduq3-turbo` 的 0.7 积分/秒到 `可灵3.0 Omni` 的 4 积分/秒不等。
 价格会变，**以 `models` 的实时输出为准。**
 
 ## 已知限制

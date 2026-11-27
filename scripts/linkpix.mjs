@@ -119,13 +119,24 @@ async function fetchModels(page, token, businessType) {
   return Array.isArray(list) ? list : [];
 }
 
-/** 没指定模型时：先免费、再按每秒单价从低到高，跳过维护中和时长不匹配的。 */
-function pickModel(rawList, { duration, hasImage }) {
-  const candidates = rawList
+/**
+ * 没指定模型时挑一个。
+ *
+ * 默认**跳过**免费模型（isFree），按每秒单价从低到高。
+ *
+ * 原因很实际：免费通道（Viduq2-turbo）是有额度的，额度用完之后提交并不会报错，
+ * 而是拿到一个永远 `pending` 的任务——用户会以为工具坏了。实测同一天第二条起
+ * 就这样卡住。所以免费模型必须显式用 `--model Viduq2-turbo` 或 `--prefer-free`
+ * 点名，才去用它。
+ */
+function pickModel(rawList, { duration, hasImage, preferFree = false }) {
+  const usable = rawList
     .filter((item) => item.frontHide !== 1 && item.frontHide !== true)
     .filter((item) => item.maintenance !== true)
     .filter((item) => supportsDuration(durationConfigOf(item), duration))
-    .filter((item) => (hasImage ? true : item.inputImageRequired !== true))
+    .filter((item) => (hasImage ? true : item.inputImageRequired !== true));
+
+  const ranked = usable
     .map((item) => ({ item, cost: costOf(item, duration, 1) ?? Number.POSITIVE_INFINITY }))
     .sort((a, b) => {
       const freeA = a.item.isFree ? 0 : 1;
@@ -133,7 +144,10 @@ function pickModel(rawList, { duration, hasImage }) {
       if (freeA !== freeB) return freeA - freeB;
       return a.cost - b.cost;
     });
-  return candidates.length ? candidates[0].item : null;
+
+  if (preferFree) return ranked.length ? ranked[0].item : null;
+  const paid = ranked.filter((entry) => entry.item.isFree !== true);
+  return paid.length ? paid[0].item : ranked.length ? ranked[0].item : null;
 }
 
 function buildVideoPayload({ prompt, images, model, duration, orientation, count, language }) {
@@ -247,6 +261,7 @@ video 选项：
   --language <语言>     默认 简体中文
   --wait                提交后等到出片
   --out <目录>          --wait 出片后直接下载
+  --prefer-free         自动选型时优先用免费模型（额度通常只有一条，用完后任务会一直排队）
   --dry-run             只打印将要提交的内容和预估积分，不提交
 
 通用选项：
@@ -297,6 +312,7 @@ async function main() {
       token: { type: "string" },
       timeout: { type: "string" },
       wait: { type: "boolean", default: false },
+      "prefer-free": { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       headless: { type: "boolean", default: true },
       help: { type: "boolean", short: "h", default: false },
@@ -451,7 +467,7 @@ async function main() {
         }
       } else {
         if (duration == null) duration = 5;
-        model = pickModel(raw, { duration, hasImage: true });
+        model = pickModel(raw, { duration, hasImage: true, preferFree: options["prefer-free"] === true });
         if (!model) throw new Error(`${duration} 秒没有可用模型，试试别的时长。`);
       }
 

@@ -150,3 +150,6 @@ POST /api/qinghu-ai-agent/ai/video/getTaskScore
    输出比例可能跟随参考图，别把 `--ratio` 当硬保证——想要竖屏就喂竖屏比例的参考图。
 8. **`status` 返回的 `videoTaskId` 可能和你提交时拿到的不是同一个**（预任务 ID → 正式任务 ID）。
    以最新返回的为准，别拿旧 ID 硬轮询。
+9. **免费模型的额度只有一条，用完不报错。** 额度耗尽后再提交，返回的仍是 `code: 0` 和
+   `status: processing`，但任务会永久停在 `pending`——没有任何错误码提示你额度没了。
+   所以自动选型默认跳过 `isFree` 的 SKU。状态里 `freeChannel: true` 说明走的是免费通道。
