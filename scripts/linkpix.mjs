@@ -258,7 +258,10 @@ async function withPage(options, fn) {
   const context = await launch({ headless: options.headless !== false });
   try {
     const page = await openSession(context);
-    const token = options.token || (await readToken(page));
+    // 优先级：显式 --token > profile 里的 localStorage > 上次缓存
+    // 兜底那层很关键：profile 里 token 偶尔会因为 SPA 没写回而读不到，
+    // 但缓存还在，不该为此让整条命令失败。
+    const token = options.token || (await readToken(page)) || (await readCachedToken());
     if (!token) {
       throw new Error("没有登录态。先跑 `linkpix login` 扫码，或用 --token 指定。");
     }
