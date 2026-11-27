@@ -17,3 +17,6 @@ linkpix-out/
 .env
 .env.*
 *.tmp
+
+# 临时探测脚本
+*.tmp.mjs

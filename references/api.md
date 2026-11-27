@@ -153,3 +153,34 @@ POST /api/qinghu-ai-agent/ai/video/getTaskScore
 9. **免费模型的额度只有一条，用完不报错。** 额度耗尽后再提交，返回的仍是 `code: 0` 和
    `status: processing`，但任务会永久停在 `pending`——没有任何错误码提示你额度没了。
    所以自动选型默认跳过 `isFree` 的 SKU。状态里 `freeChannel: true` 说明走的是免费通道。
+
+## 附：为什么没做「模拟点击」版
+
+这个仓库所有功能都是**浏览器在页面上下文里发请求**，不是脚本去点按钮。
+不是因为懒——是真的点不准。下面是在 `2026-11-27` 那一版工作台上实测到的：
+
+**1. 提交键不是 `<button>`。**
+输入区右下角那个箭头是一张绝对定位的 `<img>`（class 形如 `absolute bottom-[0px] right-...`）。
+同一页里还有多张 class 相似、`opacity: 0` 的装饰图（如 `hi-lite-img`），按 class 匹配会拿到不可见的那个。
+
+**2. 坐标点击会打到隔壁。**
+同一套坐标在三次尝试里分别命中了：顶部通知条的关闭键、工具栏的「提示词」按钮、
+商品分析（打出了 `POST /ai/product/analyze`）。也就是说点击落点会随 composer 高度和
+浮层状态漂移，重试也没用——每次错的还不一样。
+
+**3. 回车不是提交，是「AI 生成提示词」。**
+在 `.ProseMirror` 里按 Enter 会打 `POST /ai/chat/generatePrompt`（SSE 流式返回），
+把用户写好的提示词整段替换掉。任何「没找到按钮就回车兜底」的实现都会静默改写需求。
+
+**4. 提示词是 ProseMirror（contenteditable div），不是 textarea。**
+`fill()` 不管用，要 `click()` + `keyboard.insertText()`。
+
+**5. 时长是 ant-input-number（滑杆 + 数字框），没有档位按钮。**
+要改时长只能往 `.video-duration-range input` 里填值，并按它自己的
+`aria-valuemin/aria-valuemax` 夹紧，否则会被静默改回去。
+
+**6. 上传后站点会自动生成一大段提示词。**
+不清空就直接提交，提交的是它生成的词，不是用户要的。
+
+结论：这套界面可以做**只读**的 UI 操作（读工具栏、读预估积分），但**提交**这一下没有稳定的
+可编程入口。所以最终选择了页面内请求——它 100% 确定，且不需要维护一堆会随改版失效的选择器。

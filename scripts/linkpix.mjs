@@ -262,6 +262,7 @@ video 选项：
   --wait                提交后等到出片
   --out <目录>          --wait 出片后直接下载
   --prefer-free         自动选型时优先用免费模型（额度通常只有一条，用完后任务会一直排队）
+  --headless            无头运行（默认无头）
   --dry-run             只打印将要提交的内容和预估积分，不提交
 
 通用选项：
@@ -438,7 +439,7 @@ async function main() {
     if (!options.prompt) throw new Error("缺少 --prompt。描述镜头、场景、动作，越具体越好。");
 
     await withPage(options, async ({ context, page, token }) => {
-      // 1) 素材先落地成公网 URL
+      // 1) 素材先上传换公网 URL
       const assets = [];
       for (const item of images) {
         assets.push(await resolveAsset(context, page, item, BIZ.image, token));
@@ -501,7 +502,7 @@ async function main() {
       if (!taskId) throw new Error(`提交后没拿到任务 ID：${JSON.stringify(submit.body).slice(0, 400)}`);
 
       const base = {
-        ok: true, stage: "submitted", taskId, status: data.status || "processing",
+        ok: true, stage: "submitted", taskId, status: "processing",
         model: model.label, duration, orientation, count,
         estimatedCredits: model.isFree ? "免费" : fmtCredits(estimate),
       };
